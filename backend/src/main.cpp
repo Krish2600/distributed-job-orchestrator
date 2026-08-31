@@ -48,8 +48,8 @@ int main() {
     const char* workers_env = std::getenv("WORKER_THREADS");
     int num_workers = workers_env ? std::stoi(workers_env) : 3;
 
-    const char* port_env = std::getenv("PORT");
-    int api_port = port_env ? std::stoi(port_env) : 8080;
+    // Force api_port to 8080 to match Dockerfile EXPOSE 8080 and Render proxy
+    int api_port = 8080;
 
     // 2. Initialize Database Connection Pool (with robust startup retry loop)
     std::shared_ptr<DBConnectionPool> db_pool;
