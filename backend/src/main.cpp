@@ -48,8 +48,9 @@ int main() {
     const char* workers_env = std::getenv("WORKER_THREADS");
     int num_workers = workers_env ? std::stoi(workers_env) : 3;
 
-    // Force api_port to 8080 to match Dockerfile EXPOSE 8080 and Render proxy
-    int api_port = 8080;
+    // Read PORT environment variable dynamically (Render injects PORT, e.g. 10000 or 8080)
+    const char* port_env = std::getenv("PORT");
+    int api_port = (port_env && std::string(port_env).length() > 0) ? std::stoi(port_env) : 8080;
 
     // Shared pointers for DB, Redis, and WorkerPool wrapped in holder for thread safety
     auto db_pool_holder = std::make_shared<std::shared_ptr<DBConnectionPool>>(nullptr);

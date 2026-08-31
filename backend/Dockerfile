@@ -32,4 +32,5 @@ WORKDIR /app
 COPY --from=builder /app/build/job_platform_backend .
 
 EXPOSE 8080
+EXPOSE 10000
 CMD ["./job_platform_backend"]
