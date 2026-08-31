@@ -1,8 +1,8 @@
 #include "job_queue.h"
 #include <iostream>
 
-JobQueue::JobQueue(const std::string& host, int port)
-    : host_(host), port_(port) {
+JobQueue::JobQueue(const std::string& host, int port, const std::string& password)
+    : host_(host), port_(port), password_(password) {
     // Attempt initial connection. If it fails, ensure_connected will throw/reconnect
     try {
         ensure_connected();
@@ -35,6 +35,14 @@ void JobQueue::ensure_connected() {
             ctx_ = nullptr;
         }
         throw std::runtime_error("Redis connection failed: " + err_str);
+    }
+    if (!password_.empty()) {
+        redisReply* auth_reply = (redisReply*)redisCommand(ctx_, "AUTH %s", password_.c_str());
+        if (auth_reply && auth_reply->type == REDIS_REPLY_ERROR) {
+            freeReplyObject(auth_reply);
+            auth_reply = (redisReply*)redisCommand(ctx_, "AUTH default %s", password_.c_str());
+        }
+        if (auth_reply) freeReplyObject(auth_reply);
     }
     std::cout << "Connected to Redis at " << host_ << ":" << port_ << std::endl;
 }
@@ -69,6 +77,14 @@ redisContext* JobQueue::create_independent_context() const {
         if (c) redisFree(c);
         std::cerr << "Failed to create independent Redis context: " << err_str << std::endl;
         return nullptr;
+    }
+    if (!password_.empty()) {
+        redisReply* auth_reply = (redisReply*)redisCommand(c, "AUTH %s", password_.c_str());
+        if (auth_reply && auth_reply->type == REDIS_REPLY_ERROR) {
+            freeReplyObject(auth_reply);
+            auth_reply = (redisReply*)redisCommand(c, "AUTH default %s", password_.c_str());
+        }
+        if (auth_reply) freeReplyObject(auth_reply);
     }
     return c;
 }

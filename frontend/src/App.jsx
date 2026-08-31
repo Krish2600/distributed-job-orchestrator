@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import SubmitJob from './SubmitJob.jsx';
 import Dashboard from './Dashboard.jsx';
 import { Layers, Activity, RefreshCw } from 'lucide-react';
+import { API_BASE } from './config.js';
 
 export default function App() {
   const [jobs, setJobs] = useState([]);
@@ -11,7 +12,7 @@ export default function App() {
 
   const fetchJobs = async () => {
     try {
-      const response = await fetch('/api/jobs');
+      const response = await fetch(`${API_BASE}/api/jobs`);
       if (!response.ok) {
         throw new Error('Failed to retrieve task list from backend server.');
       }
@@ -39,7 +40,7 @@ export default function App() {
 
   const handleRetryJob = async (id) => {
     try {
-      const response = await fetch(`/api/jobs/${id}/retry`, {
+      const response = await fetch(`${API_BASE}/api/jobs/${id}/retry`, {
         method: 'POST',
       });
       if (!response.ok) {

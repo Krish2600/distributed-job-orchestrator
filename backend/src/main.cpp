@@ -42,6 +42,9 @@ int main() {
     const char* redis_port_env = std::getenv("REDIS_PORT");
     int redis_port = redis_port_env ? std::stoi(redis_port_env) : 6379;
 
+    const char* redis_pass_env = std::getenv("REDIS_PASSWORD");
+    std::string redis_pass = redis_pass_env ? redis_pass_env : "";
+
     const char* workers_env = std::getenv("WORKER_THREADS");
     int num_workers = workers_env ? std::stoi(workers_env) : 3;
 
@@ -70,7 +73,7 @@ int main() {
     // 3. Initialize Redis Queue Client
     std::shared_ptr<JobQueue> redis_queue;
     try {
-        redis_queue = std::make_shared<JobQueue>(redis_host, redis_port);
+        redis_queue = std::make_shared<JobQueue>(redis_host, redis_port, redis_pass);
     } catch (const std::exception& e) {
         std::cerr << "Fatal Error: Redis queue setup failed: " << e.what() << std::endl;
         return 1;
@@ -82,6 +85,15 @@ int main() {
 
     // 5. Initialize Crow App with CORS Middleware
     crow::App<CORSMiddleware> app;
+
+    // Root Health Check Route
+    CROW_ROUTE(app, "/")
+    ([]() {
+        crow::json::wvalue res;
+        res["status"] = "online";
+        res["service"] = "Distributed Job Platform Backend API";
+        return crow::response(res);
+    });
 
     // Route to query all jobs (for the main dashboard table)
     CROW_ROUTE(app, "/api/jobs")

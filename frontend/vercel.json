@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://distributed-job-backend.onrender.com/api/:path*"
+    }
+  ]
+}

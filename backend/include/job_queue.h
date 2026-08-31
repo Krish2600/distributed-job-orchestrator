@@ -8,7 +8,7 @@
 // Thread-safe Redis wrapper using hiredis
 class JobQueue {
 public:
-    JobQueue(const std::string& host, int port);
+    JobQueue(const std::string& host, int port, const std::string& password = "");
     ~JobQueue();
 
     // Disable copying/assignment
@@ -29,6 +29,7 @@ private:
 
     std::string host_;
     int port_;
+    std::string password_;
     redisContext* ctx_ = nullptr;
     std::mutex mutex_;
 };

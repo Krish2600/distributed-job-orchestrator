@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Send, AlertTriangle, Cpu, Sliders, Zap, RotateCcw } from 'lucide-react';
+import { API_BASE } from './config.js';
 
 const BUILT_IN_JOBS = [
   { type: 'IMAGE_RESIZE',   label: 'Image Resize',     duration: '~2s',  desc: 'Resize & compress images to target resolution',        fields: [{ name: 'width', label: 'Width px', default: '1280' }, { name: 'height', label: 'Height px', default: '720' }] },
@@ -55,7 +56,7 @@ export default function SubmitJob({ onJobSubmitted }) {
     const label = isCustom ? customLabel.trim() : selected.label;
 
     try {
-      const response = await fetch('/api/jobs', {
+      const response = await fetch(`${API_BASE}/api/jobs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
