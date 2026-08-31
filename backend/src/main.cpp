@@ -248,9 +248,9 @@ int main() {
         }
      });
 
-    // 6. Start Crow HTTP server on port 8080 (or PORT env)
-    std::cout << "Crow Web Server starting on port " << api_port << "..." << std::endl;
-    app.port(api_port).multithreaded().run();
+    // 6. Start Crow HTTP server on 0.0.0.0:8080 (or PORT env)
+    std::cout << "Crow Web Server starting on 0.0.0.0:" << api_port << "..." << std::endl;
+    app.bindaddr("0.0.0.0").port(api_port).multithreaded().run();
 
     // 7. Gracefully shutdown all services once App terminates
     std::cout << "Web server stopped. Cleaning up and joining worker pool threads..." << std::endl;
