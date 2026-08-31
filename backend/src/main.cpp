@@ -51,30 +51,37 @@ int main() {
     // Force api_port to 8080 to match Dockerfile EXPOSE 8080 and Render proxy
     int api_port = 8080;
 
-    // 2. Initialize Database Connection Pool (with robust startup retry loop)
-    std::shared_ptr<DBConnectionPool> db_pool;
-    try {
-        db_pool = DBConnectionPool::create(db_conn_str, 5); // 5 connections in pool
-        init_db_schema(db_pool);
-        std::cout << "Database connection pool and schema initialized successfully." << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Warning: Database setup incomplete on startup: " << e.what() << ". Will retry on incoming requests." << std::endl;
-    }
+    // Shared pointers for DB, Redis, and WorkerPool wrapped in holder for thread safety
+    auto db_pool_holder = std::make_shared<std::shared_ptr<DBConnectionPool>>(nullptr);
+    auto redis_queue_holder = std::make_shared<std::shared_ptr<JobQueue>>(nullptr);
+    auto worker_pool_holder = std::make_shared<std::shared_ptr<WorkerPool>>(nullptr);
 
-    // 3. Initialize Redis Queue Client
-    std::shared_ptr<JobQueue> redis_queue;
-    try {
-        redis_queue = std::make_shared<JobQueue>(redis_host, redis_port, redis_pass);
-        std::cout << "Redis queue initialized." << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Warning: Redis queue setup incomplete on startup: " << e.what() << std::endl;
-    }
+    // Initialize DB, Redis, and Worker Threads asynchronously in background thread
+    std::thread init_thread([db_conn_str, redis_host, redis_port, redis_pass, num_workers, db_pool_holder, redis_queue_holder, worker_pool_holder]() {
+        std::cout << "[Background Init] Connecting to Database..." << std::endl;
+        try {
+            *db_pool_holder = DBConnectionPool::create(db_conn_str, 5);
+            init_db_schema(*db_pool_holder);
+            std::cout << "[Background Init] Database connected & schema ready." << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "[Background Init Warning] DB error: " << e.what() << std::endl;
+        }
 
-    // 4. Initialize and Start Worker Pool (if DB pool created)
-    WorkerPool worker_pool(db_pool, redis_queue, num_workers);
-    if (db_pool) {
-        worker_pool.start();
-    }
+        std::cout << "[Background Init] Connecting to Redis..." << std::endl;
+        try {
+            *redis_queue_holder = std::make_shared<JobQueue>(redis_host, redis_port, redis_pass);
+            std::cout << "[Background Init] Redis queue connected." << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "[Background Init Warning] Redis error: " << e.what() << std::endl;
+        }
+
+        if (*db_pool_holder) {
+            *worker_pool_holder = std::make_shared<WorkerPool>(*db_pool_holder, *redis_queue_holder, num_workers);
+            (*worker_pool_holder)->start();
+            std::cout << "[Background Init] Worker pool started with " << num_workers << " threads." << std::endl;
+        }
+    });
+    init_thread.detach();
 
     // 5. Initialize Crow App with CORS Middleware
     crow::App<CORSMiddleware> app;
@@ -90,7 +97,8 @@ int main() {
 
     // Route to query all jobs (for the main dashboard table)
     CROW_ROUTE(app, "/api/jobs")
-    ([db_pool]() {
+    ([db_pool_holder]() {
+        auto db_pool = *db_pool_holder;
         if (!db_pool) {
             crow::json::wvalue::list empty_list;
             return crow::response(crow::json::wvalue(empty_list));
@@ -128,7 +136,12 @@ int main() {
 
     // Route to query single job details
     CROW_ROUTE(app, "/api/jobs/<int>")
-    ([db_pool](int id) {
+    ([db_pool_holder](int id) {
+        auto db_pool = *db_pool_holder;
+        if (!db_pool) {
+            crow::json::wvalue err; err["error"] = "Database not connected yet";
+            crow::response res(err); res.code = 503; return res;
+        }
         try {
             auto job = get_job_by_id(db_pool, id);
             crow::json::wvalue j;
@@ -163,7 +176,13 @@ int main() {
     // Route to submit a new job
     CROW_ROUTE(app, "/api/jobs")
     .methods("POST"_method)
-    ([db_pool, redis_queue](const crow::request& req) {
+    ([db_pool_holder, redis_queue_holder](const crow::request& req) {
+        auto db_pool = *db_pool_holder;
+        auto redis_queue = *redis_queue_holder;
+        if (!db_pool || !redis_queue) {
+            crow::json::wvalue err; err["error"] = "Services connecting in background, please try again in a moment";
+            crow::response res(err); res.code = 503; return res;
+        }
         auto body_json = crow::json::load(req.body);
         if (!body_json) {
             crow::json::wvalue err; err["error"] = "Invalid JSON";
@@ -211,7 +230,13 @@ int main() {
     // Route to retry a failed/succeeded job manually
     CROW_ROUTE(app, "/api/jobs/<int>/retry")
     .methods("POST"_method)
-    ([db_pool, redis_queue](int id) {
+    ([db_pool_holder, redis_queue_holder](int id) {
+        auto db_pool = *db_pool_holder;
+        auto redis_queue = *redis_queue_holder;
+        if (!db_pool || !redis_queue) {
+            crow::json::wvalue err; err["error"] = "Services connecting in background";
+            crow::response res(err); res.code = 503; return res;
+        }
         try {
             auto job = get_job_by_id(db_pool, id);
             if (job.status != "FAILED" && job.status != "SUCCESS") {
