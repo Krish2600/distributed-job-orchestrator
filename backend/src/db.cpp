@@ -19,16 +19,23 @@ void DBConnectionPool::init_pool() {
         try {
             pool_.push(std::make_shared<pqxx::connection>(conn_str_));
         } catch (const std::exception& e) {
-            std::cerr << "DB connect error: " << e.what() << std::endl;
-            throw;
+            std::cerr << "DB connect warning on connection " << i << ": " << e.what() << std::endl;
+            break;
         }
     }
-    std::cout << "DB pool initialized with " << pool_size_ << " connections." << std::endl;
+    std::cout << "DB pool initialized with " << pool_.size() << " connections." << std::endl;
 }
 
 std::shared_ptr<pqxx::connection> DBConnectionPool::get_connection() {
     std::unique_lock<std::mutex> lock(mutex_);
-    cv_.wait(lock, [this]() { return !pool_.empty() || shutdown_; });
+    if (pool_.empty() && !shutdown_) {
+        try {
+            return std::make_shared<pqxx::connection>(conn_str_);
+        } catch (const std::exception& e) {
+            std::cerr << "Dynamic DB connection attempt failed: " << e.what() << std::endl;
+            return nullptr;
+        }
+    }
     if (shutdown_ || pool_.empty()) return nullptr;
     auto conn = pool_.front();
     pool_.pop();
