@@ -53,35 +53,28 @@ int main() {
 
     // 2. Initialize Database Connection Pool (with robust startup retry loop)
     std::shared_ptr<DBConnectionPool> db_pool;
-    int db_retries = 15;
-    while (db_retries > 0) {
-        try {
-            db_pool = DBConnectionPool::create(db_conn_str, 5); // 5 connections in pool
-            init_db_schema(db_pool);
-            break;
-        } catch (const std::exception& e) {
-            db_retries--;
-            if (db_retries == 0) {
-                std::cerr << "Fatal Error: Database setup failed after multiple retries: " << e.what() << std::endl;
-                return 1;
-            }
-            std::cerr << "Database not ready yet. Retrying in 2 seconds... (" << db_retries << " retries left)" << std::endl;
-            std::this_thread::sleep_for(std::chrono::seconds(2));
-        }
+    try {
+        db_pool = DBConnectionPool::create(db_conn_str, 5); // 5 connections in pool
+        init_db_schema(db_pool);
+        std::cout << "Database connection pool and schema initialized successfully." << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Warning: Database setup incomplete on startup: " << e.what() << ". Will retry on incoming requests." << std::endl;
     }
 
     // 3. Initialize Redis Queue Client
     std::shared_ptr<JobQueue> redis_queue;
     try {
         redis_queue = std::make_shared<JobQueue>(redis_host, redis_port, redis_pass);
+        std::cout << "Redis queue initialized." << std::endl;
     } catch (const std::exception& e) {
-        std::cerr << "Fatal Error: Redis queue setup failed: " << e.what() << std::endl;
-        return 1;
+        std::cerr << "Warning: Redis queue setup incomplete on startup: " << e.what() << std::endl;
     }
 
-    // 4. Initialize and Start Worker Pool
+    // 4. Initialize and Start Worker Pool (if DB pool created)
     WorkerPool worker_pool(db_pool, redis_queue, num_workers);
-    worker_pool.start();
+    if (db_pool) {
+        worker_pool.start();
+    }
 
     // 5. Initialize Crow App with CORS Middleware
     crow::App<CORSMiddleware> app;
@@ -98,6 +91,10 @@ int main() {
     // Route to query all jobs (for the main dashboard table)
     CROW_ROUTE(app, "/api/jobs")
     ([db_pool]() {
+        if (!db_pool) {
+            crow::json::wvalue::list empty_list;
+            return crow::response(crow::json::wvalue(empty_list));
+        }
         auto jobs = get_all_jobs(db_pool);
         crow::json::wvalue::list job_list;
         for (const auto& job : jobs) {
