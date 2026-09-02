@@ -56,3 +56,5 @@ Job get_job_by_id(std::shared_ptr<DBConnectionPool> pool, int id);
 void update_job_status(std::shared_ptr<DBConnectionPool> pool, int id, const std::string& status, const std::string& result, int attempts);
 void update_job_progress(std::shared_ptr<DBConnectionPool> pool, int id, int progress);
 void increment_job_attempts(std::shared_ptr<DBConnectionPool> pool, int id, const std::string& status);
+int delete_completed_jobs(std::shared_ptr<DBConnectionPool> pool);
+int delete_all_jobs(std::shared_ptr<DBConnectionPool> pool);

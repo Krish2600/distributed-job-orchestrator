@@ -198,3 +198,26 @@ void increment_job_attempts(std::shared_ptr<DBConnectionPool> pool, int id, cons
     );
     tx.commit();
 }
+
+int delete_completed_jobs(std::shared_ptr<DBConnectionPool> pool) {
+    auto conn = pool->get_connection();
+    if (!conn) throw std::runtime_error("No DB connection available");
+    pqxx::work tx(*conn);
+    pqxx::result res = tx.exec("DELETE FROM jobs WHERE status IN ('SUCCESS', 'FAILED') RETURNING id");
+    tx.commit();
+    return static_cast<int>(res.size());
+}
+
+int delete_all_jobs(std::shared_ptr<DBConnectionPool> pool) {
+    auto conn = pool->get_connection();
+    if (!conn) throw std::runtime_error("No DB connection available");
+    pqxx::work tx(*conn);
+    pqxx::result res = tx.exec("DELETE FROM jobs RETURNING id");
+    try {
+        tx.exec("ALTER SEQUENCE jobs_id_seq RESTART WITH 1");
+    } catch (const std::exception& e) {
+        std::cerr << "Warning: Could not restart sequence jobs_id_seq: " << e.what() << std::endl;
+    }
+    tx.commit();
+    return static_cast<int>(res.size());
+}

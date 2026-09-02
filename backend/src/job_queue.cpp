@@ -70,6 +70,23 @@ void JobQueue::enqueue(int job_id) {
     }
 }
 
+void JobQueue::clear() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ensure_connected();
+    
+    redisReply* reply = (redisReply*)redisCommand(ctx_, "DEL job_queue");
+    if (reply == nullptr) {
+        std::cerr << "Redis DEL job_queue failed. Reconnecting..." << std::endl;
+        redisFree(ctx_);
+        ctx_ = nullptr;
+        ensure_connected();
+        reply = (redisReply*)redisCommand(ctx_, "DEL job_queue");
+    }
+    if (reply != nullptr) {
+        freeReplyObject(reply);
+    }
+}
+
 redisContext* JobQueue::create_independent_context() const {
     redisContext* c = redisConnect(host_.c_str(), port_);
     if (c == nullptr || c->err) {

@@ -18,6 +18,9 @@ public:
     // Enqueue a job_id (thread-safe, protects the inner redisContext with a mutex)
     void enqueue(int job_id);
 
+    // Clears all pending jobs from the Redis job_queue
+    void clear();
+
     // Creates a new independent redisContext. Each worker thread MUST call this
     // to obtain its own connection because hiredis contexts are not thread-safe
     // and BRPOP blocks the connection.

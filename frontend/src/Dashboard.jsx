@@ -2,19 +2,28 @@ import React, { useState } from 'react';
 import {
   CheckCircle, XCircle, RefreshCw, Layers, Calendar,
   ChevronDown, ChevronUp, AlertCircle, HelpCircle, Tag,
-  ArrowUp, ArrowRight, ArrowDown
+  ArrowUp, ArrowRight, ArrowDown, Trash2, RotateCcw, Sparkles, AlertTriangle
 } from 'lucide-react';
 
-export default function Dashboard({ jobs, onRetryJob }) {
+export default function Dashboard({ jobs, onRetryJob, onClearCompleted, onClearAll }) {
   const [expandedJobId, setExpandedJobId] = useState(null);
+  const [showFreshStartConfirm, setShowFreshStartConfirm] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   const totalJobs = jobs.length;
   const runningJobs = jobs.filter(j => j.status === 'RUNNING').length;
   const successJobs = jobs.filter(j => j.status === 'SUCCESS').length;
   const failedJobs = jobs.filter(j => j.status === 'FAILED').length;
   const queuedJobs = jobs.filter(j => j.status === 'QUEUED').length;
+  const completedJobsCount = successJobs + failedJobs;
 
   const toggleExpand = (id) => setExpandedJobId(prev => prev === id ? null : id);
+
+  const handleClearCompletedClick = async () => {
+    setIsClearing(true);
+    await onClearCompleted();
+    setIsClearing(false);
+  };
 
   const getStatusBadge = (status) => {
     const styles = {
@@ -72,17 +81,41 @@ export default function Dashboard({ jobs, onRetryJob }) {
 
       {/* Job Table */}
       <div className="bg-[#0f172a]/60 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center space-x-3">
             <Layers className="w-4.5 h-4.5 text-indigo-400" />
             <h3 className="text-base font-semibold text-white">Task Queue</h3>
+            {runningJobs > 0 && (
+              <span className="text-xs text-blue-400 font-semibold flex items-center space-x-1.5 bg-blue-500/10 px-2.5 py-1 rounded-full border border-blue-500/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
+                <span>{runningJobs} processing</span>
+              </span>
+            )}
           </div>
-          {runningJobs > 0 && (
-            <span className="text-xs text-blue-400 font-semibold flex items-center space-x-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
-              <span>{runningJobs} processing</span>
-            </span>
-          )}
+
+          <div className="flex items-center space-x-2">
+            {/* Clear Completed Button */}
+            <button
+              onClick={handleClearCompletedClick}
+              disabled={completedJobsCount === 0 || isClearing}
+              className="flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm"
+              title="Clear all finished (SUCCESS and FAILED) jobs"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-amber-400" />
+              <span>Clear Completed</span>
+            </button>
+
+            {/* Fresh Start Button */}
+            <button
+              onClick={() => setShowFreshStartConfirm(true)}
+              disabled={totalJobs === 0 || isClearing}
+              className="flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm"
+              title="Reset queue and wipe all jobs for a fresh start"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Fresh Start</span>
+            </button>
+          </div>
         </div>
 
         {totalJobs === 0 ? (
@@ -213,6 +246,48 @@ export default function Dashboard({ jobs, onRetryJob }) {
           </div>
         )}
       </div>
+
+      {/* Fresh Start Modal Confirmation */}
+      {showFreshStartConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3 text-amber-400">
+              <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                <AlertTriangle className="w-6 h-6 text-amber-400" />
+              </div>
+              <div>
+                <h4 className="text-base font-bold text-white">Confirm Fresh Start</h4>
+                <p className="text-xs text-slate-400">Wipe task queue and start clean</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              This will permanently delete all <strong className="text-white">{totalJobs} jobs</strong> from the database, purge pending jobs in Redis, and reset the task ID sequence back to #1.
+            </p>
+
+            <div className="flex items-center justify-end space-x-3 pt-2">
+              <button
+                onClick={() => setShowFreshStartConfirm(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white bg-slate-800/60 rounded-xl hover:bg-slate-800 border border-slate-700/60 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setShowFreshStartConfirm(false);
+                  setIsClearing(true);
+                  await onClearAll();
+                  setIsClearing(false);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center space-x-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Perform Fresh Start</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

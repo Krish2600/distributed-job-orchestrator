@@ -53,6 +53,36 @@ export default function App() {
     }
   };
 
+  const handleClearCompleted = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/clear-completed-jobs`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to clear completed jobs');
+      }
+      await fetchJobs();
+    } catch (err) {
+      alert(`Clear failed: ${err.message}`);
+    }
+  };
+
+  const handleClearAll = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/clear-all-jobs`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to perform fresh start');
+      }
+      await fetchJobs();
+    } catch (err) {
+      alert(`Fresh start failed: ${err.message}`);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#080b11] text-slate-100 flex flex-col antialiased">
       {/* 1. Sleek Navigation Header */}
@@ -110,7 +140,12 @@ export default function App() {
 
           {/* Job dashboard list: right column */}
           <div className="lg:col-span-8">
-            <Dashboard jobs={jobs} onRetryJob={handleRetryJob} />
+            <Dashboard
+              jobs={jobs}
+              onRetryJob={handleRetryJob}
+              onClearCompleted={handleClearCompleted}
+              onClearAll={handleClearAll}
+            />
           </div>
         </div>
       </main>

@@ -135,6 +135,56 @@ int main() {
         return crow::response(res_json);
      });
 
+    // Route to clear completed/finished jobs (SUCCESS & FAILED)
+    // Uses /api/clear-completed-jobs to avoid Crow trie conflict with /api/jobs/<int>
+    CROW_ROUTE(app, "/api/clear-completed-jobs")
+    .methods("POST"_method)
+    ([db_pool_holder]() {
+        auto db_pool = *db_pool_holder;
+        if (!db_pool) {
+            crow::json::wvalue err; err["error"] = "Database not connected yet";
+            crow::response res(err); res.code = 503; return res;
+        }
+        try {
+            int count = delete_completed_jobs(db_pool);
+            crow::json::wvalue res_json;
+            res_json["status"] = "success";
+            res_json["deleted_count"] = count;
+            res_json["message"] = "Cleared " + std::to_string(count) + " completed jobs";
+            return crow::response(res_json);
+        } catch (const std::exception& e) {
+            crow::json::wvalue err; err["error"] = e.what();
+            crow::response res(err); res.code = 500; return res;
+        }
+     });
+
+    // Route to perform a complete fresh start (delete all jobs, reset ID sequence & queue)
+    // Uses /api/clear-all-jobs to avoid Crow trie conflict with /api/jobs/<int>
+    CROW_ROUTE(app, "/api/clear-all-jobs")
+    .methods("POST"_method)
+    ([db_pool_holder, redis_queue_holder]() {
+        auto db_pool = *db_pool_holder;
+        auto redis_queue = *redis_queue_holder;
+        if (!db_pool) {
+            crow::json::wvalue err; err["error"] = "Database not connected yet";
+            crow::response res(err); res.code = 503; return res;
+        }
+        try {
+            int count = delete_all_jobs(db_pool);
+            if (redis_queue) {
+                redis_queue->clear();
+            }
+            crow::json::wvalue res_json;
+            res_json["status"] = "success";
+            res_json["deleted_count"] = count;
+            res_json["message"] = "Cleared all jobs and reset queue for a fresh start";
+            return crow::response(res_json);
+        } catch (const std::exception& e) {
+            crow::json::wvalue err; err["error"] = e.what();
+            crow::response res(err); res.code = 500; return res;
+        }
+     });
+
     // Route to query single job details
     CROW_ROUTE(app, "/api/jobs/<int>")
     ([db_pool_holder](int id) {
@@ -277,8 +327,8 @@ int main() {
 
     // 7. Gracefully shutdown all services once App terminates
     std::cout << "Web server stopped. Cleaning up and joining worker pool threads..." << std::endl;
-    worker_pool.stop();
-    db_pool->shutdown();
+    if (*worker_pool_holder) (*worker_pool_holder)->stop();
+    if (*db_pool_holder) (*db_pool_holder)->shutdown();
     std::cout << "Graceful shutdown complete." << std::endl;
 
     return 0;
