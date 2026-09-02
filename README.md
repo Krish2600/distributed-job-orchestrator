@@ -1,8 +1,15 @@
 <div align="center">
+    
+# Distributed Job Orchestrator
 
-# ⚙️ Distributed Background Job Platform
+A distributed system for submitting, scheduling and executing background jobs across multiple workers.
 
-**A high-performance, production-grade distributed task processing engine & real-time monitoring dashboard.**
+## 🚀 Live Demo
+
+🌐 **[Try the Distributed Job Orchestrator](http://jobflowkrish.duckdns.org:3000)**
+
+> Deployed on Oracle Cloud Infrastructure (OCI) using Docker.
+
 
 Built with **C++17 (Crow, libpqxx, hiredis)**, **PostgreSQL 15**, **Redis 7**, and **React 18 (Vite + TailwindCSS v4)**.
 
